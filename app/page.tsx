@@ -1,14 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Shield, 
   FileText, 
@@ -17,128 +21,111 @@ import {
   CheckCircle,
   Clock,
   Plus,
-  Eye
+  Eye,
+  LogIn
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Mock user data - In a real app, this would come from authentication
-const mockUser = {
-  id: '1',
-  name: 'John Doe',
-  email: 'john.doe@example.com',
-  company: 'Example Corp',
-  role: 'client'
-};
+interface ServiceRequest {
+  id: string;
+  service: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high';
+  status: 'pending' | 'in-progress' | 'completed';
+  createdAt: string;
+  updatedAt: string;
+}
 
-// Mock service requests
-const mockServiceRequests = [
-  {
-    id: '1',
-    service: 'Penetration Testing',
-    description: 'Web application security assessment for our e-commerce platform',
-    priority: 'high',
-    status: 'in-progress',
-    createdAt: new Date('2025-01-10'),
-    updatedAt: new Date('2025-01-12')
-  },
-  {
-    id: '2',
-    service: 'Risk Assessment',
-    description: 'Comprehensive cybersecurity risk evaluation',
-    priority: 'medium',
-    status: 'completed',
-    createdAt: new Date('2025-01-05'),
-    updatedAt: new Date('2025-01-08')
-  },
-  {
-    id: '3',
-    service: 'Employee Training',
-    description: 'Cybersecurity awareness training for 50 employees',
-    priority: 'low',
-    status: 'pending',
-    createdAt: new Date('2025-01-12'),
-    updatedAt: new Date('2025-01-12')
-  }
-];
+interface DashboardStats {
+  totalRequests: number;
+  activeServices: number;
+  completedServices: number;
+  pendingServices: number;
+  securityScore: number;
+  lastAssessment: number;
+}
 
 export default function PortalPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({ 
-    name: '', 
-    email: '', 
-    password: '', 
-    company: '', 
-    phone: '' 
+  const { data: session, status } = useSession();
+  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
+  const [newRequestForm, setNewRequestForm] = useState({
+    service: '',
+    description: '',
+    priority: 'medium'
   });
-  const [activeTab, setActiveTab] = useState('login');
+  const [loading, setLoading] = useState(false);
+
+  const fetchServiceRequests = useCallback(async () => {
+    if (!session) return;
+    
+    try {
+      const response = await fetch('/api/service-requests');
+      if (response.ok) {
+        const data = await response.json();
+        setServiceRequests(data.requests);
+      }
+    } catch (error) {
+      console.error('Error fetching service requests:', error);
+    }
+  }, [session]);
+
+  const fetchDashboardStats = useCallback(async () => {
+    if (!session) return;
+    
+    try {
+      const response = await fetch('/api/dashboard/stats');
+      if (response.ok) {
+        const data = await response.json();
+        setDashboardStats(data.stats);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    }
+  }, [session]);
 
   useEffect(() => {
-    // Check if user is authenticated (mock implementation)
-    const token = localStorage.getItem('token');
-    if (token) {
-      setIsAuthenticated(true);
+    if (session) {
+      fetchServiceRequests();
+      fetchDashboardStats();
     }
-  }, []);
+  }, [session, fetchServiceRequests, fetchDashboardStats]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleNewRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/service-requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(loginForm),
+        body: JSON.stringify(newRequestForm),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        setIsAuthenticated(true);
-        toast.success(data.message || 'Login successful!');
+        toast.success('Service request created successfully!');
+        setIsNewRequestOpen(false);
+        setNewRequestForm({ service: '', description: '', priority: 'medium' });
+        fetchServiceRequests();
+        fetchDashboardStats();
       } else {
-        toast.error(data.error || 'Login failed');
+        toast.error(data.error || 'Failed to create service request');
       }
     } catch (error) {
-      console.error('Login error:', error);
-      toast.error('Login failed. Please try again.');
+      console.error('Error creating service request:', error);
+      toast.error('Failed to create service request. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(registerForm),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        setIsAuthenticated(true);
-        toast.success(data.message || 'Registration successful! Welcome to EastSecure.');
-      } else {
-        toast.error(data.error || 'Registration failed');
-      }
-    } catch (error) {
-      console.error('Registration error:', error);
-      toast.error('Registration failed. Please try again.');
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: '/' });
     toast.success('Logged out successfully');
   };
 
@@ -160,7 +147,18 @@ export default function PortalPage() {
     }
   };
 
-  if (!isAuthenticated) {
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Shield className="h-12 w-12 text-primary mx-auto mb-4 animate-pulse" />
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
     return (
       <div className="min-h-screen">
         <Header />
@@ -177,93 +175,24 @@ export default function PortalPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="login">Login</TabsTrigger>
-                    <TabsTrigger value="register">Register</TabsTrigger>
-                  </TabsList>
+                <div className="space-y-4">
+                  <p className="text-center text-muted-foreground mb-6">
+                    Sign in with your Google account to access your cybersecurity dashboard
+                  </p>
                   
-                  <TabsContent value="login">
-                    <form onSubmit={handleLogin} className="space-y-4">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Email</label>
-                        <Input
-                          type="email"
-                          required
-                          value={loginForm.email}
-                          onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                          placeholder="your.email@company.com"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Password</label>
-                        <Input
-                          type="password"
-                          required
-                          value={loginForm.password}
-                          onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                          placeholder="Your password"
-                        />
-                      </div>
-                      <Button type="submit" className="w-full">
-                        Login
-                      </Button>
-                    </form>
-                  </TabsContent>
+                  <Button 
+                    onClick={() => signIn('google', { callbackUrl: '/portal' })}
+                    className="w-full"
+                    size="lg"
+                  >
+                    <LogIn className="h-5 w-5 mr-2" />
+                    Continue with Google
+                  </Button>
                   
-                  <TabsContent value="register">
-                    <form onSubmit={handleRegister} className="space-y-4">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Full Name *</label>
-                        <Input
-                          required
-                          value={registerForm.name}
-                          onChange={(e) => setRegisterForm(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="Your full name"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Email *</label>
-                        <Input
-                          type="email"
-                          required
-                          value={registerForm.email}
-                          onChange={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value }))}
-                          placeholder="your.email@company.com"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Password *</label>
-                        <Input
-                          type="password"
-                          required
-                          value={registerForm.password}
-                          onChange={(e) => setRegisterForm(prev => ({ ...prev, password: e.target.value }))}
-                          placeholder="Create a strong password"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Company</label>
-                        <Input
-                          value={registerForm.company}
-                          onChange={(e) => setRegisterForm(prev => ({ ...prev, company: e.target.value }))}
-                          placeholder="Your organization"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Phone</label>
-                        <Input
-                          value={registerForm.phone}
-                          onChange={(e) => setRegisterForm(prev => ({ ...prev, phone: e.target.value }))}
-                          placeholder="+254 700 123 456"
-                        />
-                      </div>
-                      <Button type="submit" className="w-full">
-                        Register
-                      </Button>
-                    </form>
-                  </TabsContent>
-                </Tabs>
+                  <p className="text-xs text-center text-muted-foreground">
+                    By signing in, you agree to our Terms of Service and Privacy Policy
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -280,7 +209,7 @@ export default function PortalPage() {
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 space-y-4 md:space-y-0">
             <div>
-              <h1 className="text-3xl font-bold">Welcome back, {mockUser.name}</h1>
+              <h1 className="text-3xl font-bold">Welcome back, {session.user.name}</h1>
               <p className="text-muted-foreground">Manage your cybersecurity services and view reports</p>
             </div>
             <Button onClick={handleLogout} variant="outline">
@@ -300,11 +229,22 @@ export default function PortalPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Active Services</CardTitle>
+                    <CardTitle className="text-sm font-medium">Total Requests</CardTitle>
                     <Shield className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">3</div>
+                    <div className="text-2xl font-bold">{dashboardStats?.totalRequests || 0}</div>
+                    <p className="text-xs text-muted-foreground">Total service requests</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Active Services</CardTitle>
+                    <AlertCircle className="h-4 w-4 text-blue-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{dashboardStats?.activeServices || 0}</div>
                     <p className="text-xs text-muted-foreground">Services in progress</p>
                   </CardContent>
                 </Card>
@@ -315,21 +255,11 @@ export default function PortalPage() {
                     <CheckCircle className="h-4 w-4 text-green-500" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">92%</div>
-                    <Progress value={92} className="mt-2" />
+                    <div className="text-2xl font-bold">{dashboardStats?.securityScore || 0}%</div>
+                    <Progress value={dashboardStats?.securityScore || 0} className="mt-2" />
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Last Assessment</CardTitle>
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">5 days</div>
-                    <p className="text-xs text-muted-foreground">ago</p>
-                  </CardContent>
-                </Card>
               </div>
 
               <Card>
@@ -339,27 +269,26 @@ export default function PortalPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-3">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      <div>
-                        <p className="font-medium">Risk Assessment Completed</p>
-                        <p className="text-sm text-muted-foreground">Your comprehensive risk report is ready for review</p>
+                    {serviceRequests.length > 0 ? (
+                      serviceRequests.slice(0, 3).map((request) => {
+                        const StatusIcon = getStatusIcon(request.status);
+                        return (
+                          <div key={request.id} className="flex items-center space-x-3">
+                            <StatusIcon className={`h-5 w-5 ${getStatusColor(request.status).replace('bg-', 'text-')}`} />
+                            <div>
+                              <p className="font-medium">{request.service}</p>
+                              <p className="text-sm text-muted-foreground">{request.description}</p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-8">
+                        <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">No recent activity</p>
+                        <p className="text-sm text-muted-foreground">Create your first service request to get started</p>
                       </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <AlertCircle className="h-5 w-5 text-blue-500" />
-                      <div>
-                        <p className="font-medium">Penetration Testing In Progress</p>
-                        <p className="text-sm text-muted-foreground">Testing phase 2 of 3 currently underway</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <Clock className="h-5 w-5 text-yellow-500" />
-                      <div>
-                        <p className="font-medium">Training Session Scheduled</p>
-                        <p className="text-sm text-muted-foreground">Employee cybersecurity training on January 20th</p>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -368,14 +297,82 @@ export default function PortalPage() {
             <TabsContent value="requests" className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">Service Requests</h2>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Request
-                </Button>
+                <Dialog open={isNewRequestOpen} onOpenChange={setIsNewRequestOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Request
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create New Service Request</DialogTitle>
+                      <DialogDescription>
+                        Submit a new cybersecurity service request. Our team will review and respond within 24 hours.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleNewRequest} className="space-y-4">
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Service Type</label>
+                        <Select 
+                          value={newRequestForm.service} 
+                          onValueChange={(value) => setNewRequestForm(prev => ({ ...prev, service: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a service" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Penetration Testing">Penetration Testing</SelectItem>
+                            <SelectItem value="Risk Assessment">Risk Assessment</SelectItem>
+                            <SelectItem value="Security Consulting">Security Consulting</SelectItem>
+                            <SelectItem value="Employee Training">Employee Training</SelectItem>
+                            <SelectItem value="Incident Response">Incident Response</SelectItem>
+                            <SelectItem value="Cloud Security">Cloud Security</SelectItem>
+                            <SelectItem value="Digital Forensics">Digital Forensics</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Priority</label>
+                        <Select 
+                          value={newRequestForm.priority} 
+                          onValueChange={(value) => setNewRequestForm(prev => ({ ...prev, priority: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Low Priority</SelectItem>
+                            <SelectItem value="medium">Medium Priority</SelectItem>
+                            <SelectItem value="high">High Priority</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Description</label>
+                        <Textarea
+                          value={newRequestForm.description}
+                          onChange={(e) => setNewRequestForm(prev => ({ ...prev, description: e.target.value }))}
+                          placeholder="Please describe your requirements in detail..."
+                          rows={4}
+                          required
+                        />
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button type="button" variant="outline" onClick={() => setIsNewRequestOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={loading}>
+                          {loading ? 'Creating...' : 'Create Request'}
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               <div className="space-y-4">
-                {mockServiceRequests.map((request) => {
+                {serviceRequests.length > 0 ? serviceRequests.map((request) => {
                   const StatusIcon = getStatusIcon(request.status);
                   return (
                     <Card key={request.id}>
@@ -401,7 +398,7 @@ export default function PortalPage() {
                       <CardContent>
                         <div className="flex items-center justify-between">
                           <div className="text-sm text-muted-foreground">
-                            Created: {request.createdAt.toLocaleDateString()}
+                            Created: {new Date(request.createdAt).toLocaleDateString()}
                           </div>
                           <Button variant="outline" size="sm">
                             <Eye className="h-4 w-4 mr-2" />
@@ -411,7 +408,21 @@ export default function PortalPage() {
                       </CardContent>
                     </Card>
                   );
-                })}
+                }) : (
+                  <Card>
+                    <CardContent className="text-center py-12">
+                      <Shield className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No Service Requests Yet</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Get started by creating your first cybersecurity service request
+                      </p>
+                      <Button onClick={() => setIsNewRequestOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create First Request
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </TabsContent>
 
@@ -486,19 +497,19 @@ export default function PortalPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium mb-2 block">Name</label>
-                      <Input value={mockUser.name} readOnly />
+                    <Input value={session.user.name || ''} readOnly />
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-2 block">Email</label>
-                      <Input value={mockUser.email} readOnly />
+                    <Input value={session.user.email || ''} readOnly />
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-2 block">Company</label>
-                      <Input value={mockUser.company} readOnly />
+                    <Input value={session.user.company || ''} readOnly />
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-2 block">Role</label>
-                      <Input value={mockUser.role} readOnly />
+                    <Input value={session.user.role || 'client'} readOnly />
                     </div>
                   </div>
                   <Button variant="outline">
