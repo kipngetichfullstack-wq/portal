@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
-import { hashPassword, generateToken } from '@/lib/auth';
+// import { hashPassword, generateToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,27 +28,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Hash password
-    const hashedPassword = await hashPassword(password);
+    // const hashedPassword = await hashPassword(password);
 
     // Create user
     const [user] = await db.insert(users).values({
       name,
       email,
-      password: hashedPassword,
+      // password: hashedPassword,
       company: company || '',
       phone: phone || '',
       role: 'client'
     }).returning();
 
     // Generate JWT token
-    const token = generateToken(user.id);
+    // const token = generateToken(user.id);
 
     // Return user data and token (exclude password)
     const { password: _, ...userWithoutPassword } = user;
     
     return NextResponse.json({
       user: userWithoutPassword,
-      token,
+      // token,
       message: 'Registration successful'
     }, { status: 201 });
   } catch (error) {

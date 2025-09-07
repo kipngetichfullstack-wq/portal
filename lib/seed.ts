@@ -1,17 +1,17 @@
 import { db } from './db';
 import { users, posts } from './schema';
-import { hashPassword } from './auth';
+// import { hashPassword } from './auth';
 
 async function main() {
   console.log('Seeding database...');
 
   // Create sample users
-  const hashedPassword = await hashPassword('1234');
+  // const hashedPassword = await hashPassword('1234');
   
   await db.insert(users).values({
     email: 'ruto365@gmail.com',
     name: 'Kipngetich Ruto',
-    password: hashedPassword,
+    // password: hashedPassword,
     role: 'client',
     company: 'ImaraVault Ltd',
     phone: '+254 716350600',
