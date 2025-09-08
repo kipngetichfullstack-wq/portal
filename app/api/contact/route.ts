@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { inquiries } from '@/lib/schema';
+import { sendContactNotification } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,8 +27,15 @@ export async function POST(request: NextRequest) {
       status: 'new'
     }).returning();
 
-    // In a real app, you would send an email notification here
-    // using Nodemailer or similar service
+    // Send email notification
+    await sendContactNotification({
+      name,
+      email,
+      company,
+      phone,
+      service,
+      message,
+    });
 
     return NextResponse.json(
       { message: 'Inquiry submitted successfully', id: inquiry.id },

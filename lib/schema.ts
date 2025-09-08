@@ -57,6 +57,26 @@ export const verificationTokens = pgTable(
   })
 );
 
+export const emailVerificationCodes = pgTable('email_verification_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  code: text('code').notNull(),
+  expires: timestamp('expires', { mode: 'date' }).notNull(),
+  used: boolean('used').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const websiteScans = pgTable('website_scans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull(),
+  url: text('url').notNull(),
+  status: text('status').default('pending').notNull(), // pending, scanning, completed, failed
+  results: text('results'), // JSON string of scan results
+  scanType: text('scan_type').notNull(), // basic, advanced, full
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+});
+
 export const posts = pgTable('posts', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
@@ -119,6 +139,13 @@ export const serviceRequestsRelations = relations(serviceRequests, ({ one }) => 
   }),
 }));
 
+export const websiteScansRelations = relations(websiteScans, ({ one }) => ({
+  user: one(users, {
+    fields: [websiteScans.userId],
+    references: [users.id],
+  }),
+}));
+
 // Types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -130,3 +157,7 @@ export type Inquiry = typeof inquiries.$inferSelect;
 export type NewInquiry = typeof inquiries.$inferInsert;
 export type ServiceRequest = typeof serviceRequests.$inferSelect;
 export type NewServiceRequest = typeof serviceRequests.$inferInsert;
+export type EmailVerificationCode = typeof emailVerificationCodes.$inferSelect;
+export type NewEmailVerificationCode = typeof emailVerificationCodes.$inferInsert;
+export type WebsiteScan = typeof websiteScans.$inferSelect;
+export type NewWebsiteScan = typeof websiteScans.$inferInsert;
