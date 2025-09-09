@@ -5,6 +5,7 @@ import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { db } from './db';
 import { users, accounts, sessions, verificationTokens } from './schema';
 import { eq } from 'drizzle-orm';
+import bcrypt from 'bcryptjs';
 
 export const authOptions: NextAuthOptions = {
   adapter: DrizzleAdapter(db, {
@@ -94,3 +95,10 @@ export const authOptions: NextAuthOptions = {
     error: '/portal',
   },
 };
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 12);
+}
+
+export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
+  return bcrypt.compare(password, hashedPassword);
+}

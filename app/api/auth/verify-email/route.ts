@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users, emailVerificationCodes } from '@/lib/schema';
 import { eq, and, gt } from 'drizzle-orm';
-import { signIn } from 'next-auth/react';
+import { hashPassword } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, code, name, company, phone } = body;
+    const { email, code, name, company, phone, password } = body;
 
     if (!email || !code) {
       return NextResponse.json(
@@ -66,11 +66,13 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Create new user
+      const hashedPassword = password ? await hashPassword(password) : null;
       const [newUser] = await db
         .insert(users)
         .values({
           email,
           name: name || '',
+          password: hashedPassword,
           company: company || '',
           phone: phone || '',
           role: 'client',
