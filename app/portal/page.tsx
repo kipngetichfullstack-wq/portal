@@ -26,7 +26,8 @@ import {
   Search,
   Globe,
   Mail,
-  Code
+  Code,
+  Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -59,14 +60,20 @@ interface WebsiteScan {
   completedAt?: string;
 }
 
-interface EmailAuthForm {
+interface AuthForm {
   email: string;
+  password: string;
   code: string;
   name: string;
   company: string;
   phone: string;
 }
 
+interface UserCheck {
+  exists: boolean;
+  hasPassword: boolean;
+  requiresPassword: boolean;
+}
 export default function PortalPage() {
   const { data: session, status } = useSession();
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
@@ -74,8 +81,9 @@ export default function PortalPage() {
   const [websiteScans, setWebsiteScans] = useState<WebsiteScan[]>([]);
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
   const [isNewScanOpen, setIsNewScanOpen] = useState(false);
-  const [isEmailAuthOpen, setIsEmailAuthOpen] = useState(false);
-  const [emailAuthStep, setEmailAuthStep] = useState<'email' | 'verify'>('email');
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authStep, setAuthStep] = useState<'email' | 'password' | 'verify'>('email');
+  const [userCheck, setUserCheck] = useState<UserCheck | null>(null);
   const [newRequestForm, setNewRequestForm] = useState({
     service: '',
     description: '',
@@ -85,8 +93,9 @@ export default function PortalPage() {
     url: '',
     scanType: 'basic'
   });
-  const [emailAuthForm, setEmailAuthForm] = useState<EmailAuthForm>({
+  const [authForm, setAuthForm] = useState<AuthForm>({
     email: '',
+    password: '',
     code: '',
     name: '',
     company: '',
@@ -207,6 +216,38 @@ export default function PortalPage() {
     }
   };
 
+  const handleCheckUser = async () => {
+    setLoading(true);
+    
+    try {
+      const response = await fetch('/api/auth/check-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: authForm.email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUserCheck(data);
+        if (data.requiresPassword) {
+          setAuthStep('password');
+        } else {
+          // Send verification code for new users or OAuth users
+          await handleSendVerificationCode();
+        }
+      } else {
+        toast.error(data.error || 'Failed to check user');
+      }
+    } catch (error) {
+      console.error('Error checking user:', error);
+      toast.error('Failed to check user. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
   const handleSendVerificationCode = async () => {
     setLoading(true);
     
@@ -216,14 +257,14 @@ export default function PortalPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: emailAuthForm.email }),
+        body: JSON.stringify({ email: authForm.email }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
         toast.success('Verification code sent to your email!');
-        setEmailAuthStep('verify');
+        setAuthStep('verify');
       } else {
         toast.error(data.error || 'Failed to send verification code');
       }
@@ -235,6 +276,30 @@ export default function PortalPage() {
     }
   };
 
+  const handlePasswordLogin = async () => {
+    setLoading(true);
+    
+    try {
+      const result = await signIn('credentials', {
+        email: authForm.email,
+        password: authForm.password,
+        redirect: false,
+      });
+
+      if (result?.ok) {
+        toast.success('Logged in successfully!');
+        setIsAuthOpen(false);
+        resetAuthForm();
+      } else {
+        toast.error('Invalid email or password');
+      }
+    } catch (error) {
+      console.error('Error logging in:', error);
+      toast.error('Failed to log in. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
   const handleVerifyEmail = async () => {
     setLoading(true);
     
@@ -244,24 +309,17 @@ export default function PortalPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(emailAuthForm),
+        body: JSON.stringify(authForm),
       });
 
       const data = await response.json();
 
       if (response.ok) {
         toast.success('Email verified successfully! Please sign in.');
-        setIsEmailAuthOpen(false);
-        setEmailAuthStep('email');
-        setEmailAuthForm({
-          email: '',
-          code: '',
-          name: '',
-          company: '',
-          phone: ''
-        });
+        setIsAuthOpen(false);
+        resetAuthForm();
         // Trigger sign in
-        await signIn('email', { email: emailAuthForm.email, callbackUrl: '/portal' });
+        await signIn('email-verification', { email: authForm.email, callbackUrl: '/portal' });
       } else {
         toast.error(data.error || 'Failed to verify email');
       }
@@ -271,6 +329,19 @@ export default function PortalPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetAuthForm = () => {
+    setAuthStep('email');
+    setUserCheck(null);
+    setAuthForm({
+          email: '',
+          password: '',
+          code: '',
+          name: '',
+          company: '',
+          phone: ''
+    });
   };
 
   const handleLogout = async () => {
@@ -347,7 +418,7 @@ export default function PortalPage() {
                     </div>
                   </div>
                   
-                  <Dialog open={isEmailAuthOpen} onOpenChange={setIsEmailAuthOpen}>
+                  <Dialog open={isAuthOpen} onOpenChange={setIsAuthOpen}>
                     <DialogTrigger asChild>
                       <Button variant="outline" className="w-full" size="lg">
                         <Mail className="h-5 w-5 mr-2" />
@@ -357,86 +428,132 @@ export default function PortalPage() {
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>
-                          {emailAuthStep === 'email' ? 'Sign in with Email' : 'Verify Your Email'}
+                          {authStep === 'email' ? 'Sign in with Email' : 
+                           authStep === 'password' ? 'Enter Password' : 'Verify Your Email'}
                         </DialogTitle>
                         <DialogDescription>
-                          {emailAuthStep === 'email' 
+                          {authStep === 'email' 
                             ? 'Enter your email to receive a verification code'
+                            : authStep === 'password'
+                            ? 'Enter your password to sign in'
                             : 'Enter the verification code sent to your email'
                           }
                         </DialogDescription>
                       </DialogHeader>
                       
-                      {emailAuthStep === 'email' ? (
+                      {authStep === 'email' ? (
                         <div className="space-y-4">
                           <div>
                             <label className="text-sm font-medium mb-2 block">Email Address</label>
                             <Input
                               type="email"
-                              value={emailAuthForm.email}
-                              onChange={(e) => setEmailAuthForm(prev => ({ ...prev, email: e.target.value }))}
+                              value={authForm.email}
+                              onChange={(e) => setAuthForm(prev => ({ ...prev, email: e.target.value }))}
                               placeholder="your@email.com"
                               required
                             />
                           </div>
                           <Button 
-                            onClick={handleSendVerificationCode} 
-                            disabled={loading || !emailAuthForm.email}
+                            onClick={handleCheckUser} 
+                            disabled={loading || !authForm.email}
                             className="w-full"
                           >
-                            {loading ? 'Sending...' : 'Send Verification Code'}
+                            {loading ? 'Checking...' : 'Continue'}
                           </Button>
+                        </div>
+                      ) : authStep === 'password' ? (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-sm font-medium mb-2 block">Password</label>
+                            <Input
+                              type="password"
+                              value={authForm.password}
+                              onChange={(e) => setAuthForm(prev => ({ ...prev, password: e.target.value }))}
+                              placeholder="Enter your password"
+                              required
+                            />
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button 
+                              variant="outline" 
+                              onClick={() => setAuthStep('email')}
+                              className="flex-1"
+                            >
+                              Back
+                            </Button>
+                            <Button 
+                              onClick={handlePasswordLogin} 
+                              disabled={loading || !authForm.password}
+                              className="flex-1"
+                            >
+                              <Lock className="h-4 w-4 mr-2" />
+                              {loading ? 'Signing in...' : 'Sign In'}
+                            </Button>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-4">
                           <div>
                             <label className="text-sm font-medium mb-2 block">Verification Code</label>
                             <Input
-                              value={emailAuthForm.code}
-                              onChange={(e) => setEmailAuthForm(prev => ({ ...prev, code: e.target.value }))}
+                              value={authForm.code}
+                              onChange={(e) => setAuthForm(prev => ({ ...prev, code: e.target.value }))}
                               placeholder="Enter 6-digit code"
                               maxLength={6}
                               required
                             />
                           </div>
+                          {!userCheck?.exists && (
+                            <>
                           <div>
                             <label className="text-sm font-medium mb-2 block">Full Name (Optional)</label>
                             <Input
-                              value={emailAuthForm.name}
-                              onChange={(e) => setEmailAuthForm(prev => ({ ...prev, name: e.target.value }))}
+                              value={authForm.name}
+                              onChange={(e) => setAuthForm(prev => ({ ...prev, name: e.target.value }))}
                               placeholder="Your full name"
                             />
                           </div>
+                              <div>
+                                <label className="text-sm font-medium mb-2 block">Password (Optional)</label>
+                                <Input
+                                  type="password"
+                                  value={authForm.password}
+                                  onChange={(e) => setAuthForm(prev => ({ ...prev, password: e.target.value }))}
+                                  placeholder="Create a password"
+                                />
+                              </div>
                           <div>
                             <label className="text-sm font-medium mb-2 block">Company (Optional)</label>
                             <Input
-                              value={emailAuthForm.company}
-                              onChange={(e) => setEmailAuthForm(prev => ({ ...prev, company: e.target.value }))}
+                              value={authForm.company}
+                              onChange={(e) => setAuthForm(prev => ({ ...prev, company: e.target.value }))}
                               placeholder="Your company"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-medium mb-2 block">Phone (Optional)</label>
                             <Input
-                              value={emailAuthForm.phone}
-                              onChange={(e) => setEmailAuthForm(prev => ({ ...prev, phone: e.target.value }))}
+                              value={authForm.phone}
+                              onChange={(e) => setAuthForm(prev => ({ ...prev, phone: e.target.value }))}
                               placeholder="+254 700 123 456"
                             />
                           </div>
+                            </>
+                          )}
                           <div className="flex space-x-2">
                             <Button 
                               variant="outline" 
-                              onClick={() => setEmailAuthStep('email')}
+                              onClick={() => setAuthStep('email')}
                               className="flex-1"
                             >
                               Back
                             </Button>
                             <Button 
                               onClick={handleVerifyEmail} 
-                              disabled={loading || !emailAuthForm.code}
+                              disabled={loading || !authForm.code}
                               className="flex-1"
                             >
-                              {loading ? 'Verifying...' : 'Verify & Sign In'}
+                              {loading ? 'Verifying...' : userCheck?.exists ? 'Verify & Sign In' : 'Create Account'}
                             </Button>
                           </div>
                         </div>

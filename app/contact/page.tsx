@@ -1,11 +1,9 @@
 import { Metadata } from 'next';
+import { useState } from 'react';
 import { Phone, Mail, Clock, Send, MessageSquare, MessageCircle } from 'lucide-react';
 import Header from '@/components/layout/Header';
+import { toast } from 'sonner';
 
-export const metadata: Metadata = {
-  title: 'Contact Us | EastSecure Cyber Solutions',
-  description: 'Get in touch with East Africa\'s leading cybersecurity experts. Free consultations available.',
-};
 
 const contactInfo = [
   {
@@ -59,6 +57,65 @@ const contactInfo = [
 // ];
 
 export default function ContactPage() {
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    company: '',
+    service: '',
+    message: ''
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
+          email: formData.email,
+          phone: formData.phone,
+          company: formData.company,
+          service: formData.service,
+          message: formData.message,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Message sent successfully! We\'ll get back to you within 24 hours.');
+        setFormData({
+          firstName: '',
+          lastName: '',
+          email: '',
+          phone: '',
+          company: '',
+          service: '',
+          message: ''
+        });
+      } else {
+        toast.error(data.error || 'Failed to send message. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div className="min-h-screen bg-background">
     <Header />
@@ -92,14 +149,17 @@ export default function ContactPage() {
                 </p>
               </div>
 
-              <form className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium mb-2">
                       First Name *
                     </label>
                     <input
+                      name="firstName"
                       type="text"
+                      value={formData.firstName}
+                      onChange={handleInputChange}
                       required
                       className="w-full px-4 py-3 bg-input border border-border rounded-xl placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
                       placeholder="John"
@@ -110,7 +170,10 @@ export default function ContactPage() {
                       Last Name *
                     </label>
                     <input
+                      name="lastName"
                       type="text"
+                      value={formData.lastName}
+                      onChange={handleInputChange}
                       required
                       className="w-full px-4 py-3 bg-input border border-border rounded-xl placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
                       placeholder="Doe"
@@ -124,7 +187,10 @@ export default function ContactPage() {
                       Email Address *
                     </label>
                     <input
+                      name="email"
                       type="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
                       required
                       className="w-full px-4 py-3 bg-input border border-border rounded-xl placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
                       placeholder="john@company.com"
@@ -135,7 +201,10 @@ export default function ContactPage() {
                       Phone Number
                     </label>
                     <input
+                      name="phone"
                       type="tel"
+                      value={formData.phone}
+                      onChange={handleInputChange}
                       className="w-full px-4 py-3 bg-input border border-border rounded-xl placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
                       placeholder="+254 700 123 456"
                     />
@@ -147,7 +216,10 @@ export default function ContactPage() {
                     Company
                   </label>
                   <input
+                    name="company"
                     type="text"
+                    value={formData.company}
+                    onChange={handleInputChange}
                     className="w-full px-4 py-3 bg-input border border-border rounded-xl placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
                     placeholder="Your Company Name"
                   />
@@ -157,7 +229,12 @@ export default function ContactPage() {
                   <label className="block text-sm font-medium mb-2">
                     Service Interest
                   </label>
-                  <select className="w-full px-4 py-3 bg-input border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300">
+                  <select 
+                    name="service"
+                    value={formData.service}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-input border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
+                  >
                     <option value="">Select a service</option>
                     <option value="penetration-testing">Penetration Testing</option>
                     <option value="risk-assessment">Risk Assessment</option>
@@ -174,6 +251,9 @@ export default function ContactPage() {
                     Message *
                   </label>
                   <textarea
+                    name="message"
+                    value={formData.message}
+                    onChange={handleInputChange}
                     required
                     rows={6}
                     className="w-full px-4 py-3 bg-input border border-border rounded-xl placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300 resize-none"
@@ -183,10 +263,11 @@ export default function ContactPage() {
 
                 <button
                   type="submit"
+                  disabled={loading}
                   className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-primary-foreground px-8 py-4 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-cyan-500/25 flex items-center justify-center gap-2 group"
                 >
                   <Send className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  Send Message
+                  {loading ? 'Sending...' : 'Send Message'}
                 </button>
               </form>
             </div>
