@@ -15,6 +15,13 @@
       "when": 1757257914002,
       "tag": "0001_loud_mad_thinker",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1757342538852,
+      "tag": "0002_optimal_silver_sable",
+      "breakpoints": true
     }
   ]
 }
