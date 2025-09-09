@@ -24,6 +24,7 @@ export const authOptions: NextAuthOptions = {
       name: 'Email',
       credentials: {
         email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
         if (!credentials?.email) {
@@ -31,17 +32,13 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const userResult = await db
-            .select()
-            .from(users)
-            .where(eq(users.email, credentials.email))
-            .limit(1);
+          const userResult = await db.select().from(users).where(eq(users.email, credentials.email)).limit(1);
 
           const user = userResult[0];
 
-          if (user && user.emailVerified) {
+          if (user && user.emailVerified && await verifyPassword(credentials.password, user.password!)) {
             return {
-              id: user.id,
+              id: String(user.id),
               email: user.email,
               name: user.name,
               role: user.role,
@@ -59,7 +56,7 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   session: {
-    strategy: 'database',
+    strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   cookies: {
@@ -72,22 +69,25 @@ export const authOptions: NextAuthOptions = {
         secure: process.env.NODE_ENV === 'production',
       },
     },
-  },
+  },  
   callbacks: {
-    async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id;
-        session.user.role = (user as any).role || 'client';
-        session.user.company = (user as any).company;
-        session.user.phone = (user as any).phone;
-      }
-      return session;
-    },
     async jwt({ token, user }) {
       if (user) {
+        token.id = user.id;
         token.role = (user as any).role || 'client';
+        token.company = (user as any).company;
+        token.phone = (user as any).phone;
       }
       return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as string;
+        session.user.company = token.company as string;
+        session.user.phone = token.phone as string;
+      }
+      return session;
     },
   },
   pages: {
@@ -95,6 +95,7 @@ export const authOptions: NextAuthOptions = {
     error: '/portal',
   },
 };
+
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
 }

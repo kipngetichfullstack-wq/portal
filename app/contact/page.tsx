@@ -1,4 +1,5 @@
-import { Metadata } from 'next';
+"use client";
+
 import { useState } from 'react';
 import { Phone, Mail, Clock, Send, MessageSquare, MessageCircle } from 'lucide-react';
 import Header from '@/components/layout/Header';

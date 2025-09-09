@@ -451,6 +451,7 @@ export default function PortalPage() {
                               onChange={(e) => setAuthForm(prev => ({ ...prev, email: e.target.value }))}
                               placeholder="your@email.com"
                               required
+                              onKeyDown={(e) => e.key === 'Enter' && handleCheckUser()}
                             />
                           </div>
                           <Button 
@@ -471,6 +472,7 @@ export default function PortalPage() {
                               onChange={(e) => setAuthForm(prev => ({ ...prev, password: e.target.value }))}
                               placeholder="Enter your password"
                               required
+                              onKeyDown={(e) => e.key === 'Enter' && handlePasswordLogin()}
                             />
                           </div>
                           <div className="flex space-x-2">
